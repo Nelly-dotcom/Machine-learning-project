@@ -1,2 +1,2 @@
-# Predict-
+# Predict
 very nice prediction repo
