@@ -4,6 +4,7 @@ Created on Thu Jul 15 12:12:50 2021
 
 @author: Carin
 """
+from itertools import product
 from sklearn.metrics import confusion_matrix
 import tensorflow as tf
 from tensorflow import keras
@@ -45,12 +46,34 @@ test.drop(columns=['shop_id'], inplace=True)
 
 sales_train.rename(columns={'unique_shop_id':'shop_id'}, inplace=True)
 test.rename(columns={'unique_shop_id':'shop_id'}, inplace=True)
+#%%
+build_cols = ['date_block_num','shop_id','item_id']
+stack_of_months = []
+for month_num in sales_train['date_block_num'].unique():
+    # one month at a time, combine all combination of available shop_id and item_id
+    sales = sales_train[sales_train['date_block_num']==month_num]
+    this_month_unique_shop_id = sales['shop_id'].unique()
+    this_month_unique_item_id = sales['item_id'].unique()
+    this_month_sales = np.array(list(product(
+        [month_num], this_month_unique_shop_id, this_month_unique_item_id)
+        ), dtype='int16')
+    stack_of_months.append(this_month_sales)
+
+# concatenate (vstack) the list of month tables and convert it back into a dataframe
+matrix = pd.DataFrame(np.vstack(stack_of_months), columns=build_cols)
+matrix['date_block_num'] = matrix['date_block_num'].astype(np.int8)
+matrix['shop_id'] = matrix['shop_id'].astype(np.int8)
+matrix['item_id'] = matrix['item_id'].astype(np.int16)
+matrix.sort_values(build_cols, inplace=True)
+
 
 #%%
 grouped_train = sales_train[['month_year_name', 'item_cnt_day', 'shop_id', 'item_id']]
 grouped_train = grouped_train.groupby(['month_year_name','shop_id', 'item_id']).sum().reset_index()
 grouped_train = pd.merge(grouped_train, sales_train, how='left')
-
+#%%
+grouped_train = pd.merge(grouped_train, matrix, how='outer')
+del(matrix)
 #%%
 count = sales_train[['month_year_name', 'item_cnt_day','shop_id', 'item_id']]
 count_day = count.groupby(['month_year_name','shop_id', 'item_id']).sum().reset_index()
