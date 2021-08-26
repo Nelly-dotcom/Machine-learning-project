@@ -4,6 +4,7 @@ Created on Thu Jul 15 12:12:50 2021
 
 @author: Carin
 """
+# Cell0
 from itertools import product
 from sklearn.metrics import confusion_matrix
 import tensorflow as tf
@@ -16,6 +17,7 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from catboost import CatBoostRegressor, Pool
 #%%
+# Cell1
 items = pd.read_csv('C:/Users/Carin/OneDrive/Documents/AW academy/Miniprosjekt 2/competitive-data-science-predict-future-sales/items.csv')
 sales_train = pd.read_csv('C:/Users/Carin/OneDrive/Documents/AW academy/Miniprosjekt 2/competitive-data-science-predict-future-sales/sales_train.csv')
 test = pd.read_csv('C:/Users/Carin/OneDrive/Documents/AW academy/Miniprosjekt 2/competitive-data-science-predict-future-sales/test.csv')
@@ -24,11 +26,12 @@ item_categories = pd.read_csv('C:/Users/Carin/OneDrive/Documents/AW academy/Mini
 calendar = pd.read_csv('C:/Users/Carin/OneDrive/Documents/AW academy/Miniprosjekt 2/calender.csv')
 
 #%%
+# Cell2
 sales_train['date'] = pd.to_datetime(sales_train.date)
 calendar['date'] = pd.to_datetime(calendar['date'], format='%Y-%m-%d')
 
 #%%
-
+# Cell3
 sales_train = pd.merge(sales_train, test, how='left')
 test['month_of_year']=11
 
@@ -42,12 +45,14 @@ test = pd.merge(test, shops, how='left')
 
 sales_train = pd.merge(sales_train, calendar, how='left')
 #%%
+# Cell4
 sales_train.drop(columns=['shop_id'], inplace=True)
 test.drop(columns=['shop_id'], inplace=True)
 
 sales_train.rename(columns={'unique_shop_id':'shop_id'}, inplace=True)
 test.rename(columns={'unique_shop_id':'shop_id'}, inplace=True)
 #%%
+# Cell5
 build_cols = ['date_block_num','shop_id','item_id']
 stack_of_months = []
 for month_num in sales_train['date_block_num'].unique():
@@ -69,23 +74,17 @@ matrix.sort_values(build_cols, inplace=True)
 
 
 #%%
-grouped_train = sales_train[['month_year_name', 'item_cnt_day', 'shop_id', 'item_id']]
-grouped_train = grouped_train.groupby(['month_year_name','shop_id', 'item_id']).sum().reset_index()
-grouped_train = pd.merge(grouped_train, sales_train, how='left')
-#%%
-grouped_train = pd.merge(grouped_train, matrix, how='outer')
-del(matrix)
-#%%
-count = sales_train[['month_year_name', 'item_cnt_day','shop_id', 'item_id']]
-count_day = count.groupby(['month_year_name','shop_id', 'item_id']).sum().reset_index()
-count_day.columns = ['month_year_name', 'shop_id', 'item_id', 'item_cnt_month']
+# Cell6
+count = sales_train[['month_year_name', 'item_cnt_day','shop_id', 'item_id', 'item_category_id']]
+count_day = count.groupby(['month_year_name','shop_id', 'item_id', 'item_category_id']).sum().reset_index()
+count_day.columns = ['month_year_name', 'shop_id', 'item_id', 'item_category_id', 'item_cnt_month']
 
-count = pd.pivot_table(count_day, values =['shop_id', 'item_id', 'item_cnt_month'], index =['shop_id', 'item_id'],
+count = pd.pivot_table(count_day, values =['shop_id', 'item_id', 'item_cnt_month'], index =['shop_id', 'item_id', 'item_category_id'],
                          columns =['month_year_name']).reset_index().rename_axis(None, axis=0)
 count.columns = [f'{j}{i}' for i, j in count.columns]
 count.columns
 count.fillna(0, inplace=True)
-count=count.astype(np.int8)
+#count=count.astype(np.int8)
 
 count.drop(columns=['April 2013item_cnt_month',
        'April 2014item_cnt_month',
@@ -107,7 +106,7 @@ count.drop(columns=['April 2013item_cnt_month',
        'September 2014item_cnt_month'], inplace=True)
 
 #%%
-
+# Cell7
 count_cats = sales_train[['month_year_name', 'item_cnt_day','shop_id', 'item_category_id']]
 count_cats = count_cats.groupby(['month_year_name','shop_id', 'item_category_id']).sum()
 count_cats = count_cats.reset_index()
@@ -144,15 +143,71 @@ count_cats=count_cats.drop(columns= ['April 2013item_category_count_per_month',
        'October 2014item_category_count_per_month',
        'September 2013item_category_count_per_month',
        'September 2014item_category_count_per_month'])
+#%%
+# Cell8
+date_count_cat = sales_train[['month_year_name', 'item_cnt_day', 'item_category_id']]
+date_count_cat = date_count_cat.groupby(['month_year_name', 'item_category_id']).sum()
+date_count_cat = date_count_cat.reset_index()
+date_count_cat.columns = ['month_year_name', 'item_category_id', 'cat_count_per_month_ex_shops']
+
+date_count_cat = pd.pivot_table(date_count_cat, values =['item_category_id', 'cat_count_per_month_ex_shops'], index =['item_category_id'],
+                         columns =['month_year_name']).reset_index().rename_axis(None, axis=0)
+date_count_cat.columns = [f'{j}{i}' for i, j in date_count_cat.columns]
+date_count_cat.columns
+
+date_count_cat.fillna(0, inplace=True)
+
+date_count_cat=date_count_cat.drop(columns= ['April 2013cat_count_per_month_ex_shops',
+       'April 2014cat_count_per_month_ex_shops',
+       'August 2013cat_count_per_month_ex_shops',
+       'August 2014cat_count_per_month_ex_shops',
+       'December 2013cat_count_per_month_ex_shops',
+       'December 2014cat_count_per_month_ex_shops',
+       'February 2013cat_count_per_month_ex_shops',
+       'February 2014cat_count_per_month_ex_shops',
+       'January 2013cat_count_per_month_ex_shops',
+       'January 2014cat_count_per_month_ex_shops',
+       'July 2013cat_count_per_month_ex_shops',
+       'July 2014cat_count_per_month_ex_shops',
+       'June 2013cat_count_per_month_ex_shops',
+       'June 2014cat_count_per_month_ex_shops',
+       'March 2013cat_count_per_month_ex_shops',
+       'March 2014cat_count_per_month_ex_shops',
+       'May 2013cat_count_per_month_ex_shops',
+       'May 2014cat_count_per_month_ex_shops',
+       'November 2013cat_count_per_month_ex_shops',
+       'November 2014cat_count_per_month_ex_shops',
+       'October 2013cat_count_per_month_ex_shops',
+       'October 2014cat_count_per_month_ex_shops',
+       'September 2013cat_count_per_month_ex_shops',
+       'September 2014cat_count_per_month_ex_shops'])
+
+
+
+#%% Cell9
+# count_full = pd.merge(count, count_cats, how='left', left_on=['item_id', 'item_category_id'], right_on=['shop_id', 'item_category_id'])
+# count_full = pd.merge(count_full, date_count_cat, how='left', left_on=['item_category_id'], right_on=['item_category_id'])
 
 #%%
+# Cell10
+grouped_train = sales_train[['month_year_name', 'item_cnt_day', 'shop_id', 'item_id', 'item_category_id']]
+grouped_train = grouped_train.groupby(['month_year_name','shop_id', 'item_id', 'item_category_id']).sum().reset_index()
+grouped_train = pd.merge(grouped_train, sales_train, how='left')
+#%%
+# Cell11
+grouped_train = pd.merge(grouped_train, matrix, how='outer')
+del(matrix)
+#%% Cell12
 grouped_train = pd.merge(grouped_train, count, how='left')
 grouped_train = pd.merge(grouped_train, count_cats, how='left')
+#grouped_train = pd.merge(grouped_train, count_full, how='inner')
 grouped_train = pd.merge(grouped_train, count_day, how='left')
-test = pd.merge(test, count, how='left')
-test = pd.merge(test, count_cats, how ='left')
-
-#%%
+grouped_train = pd.merge(grouped_train, date_count_cat, how='left')
+test2 = pd.merge(test, count, how='left')
+test2 = pd.merge(test2, count_cats, how ='left')
+test2 = pd.merge(test2, date_count_cat, how='left')
+#%% Cell13
+train_head=grouped_train.head(10)
 # cal_cols = grouped_train[['shop_id', 'item_id', 'red_day_not_sun', 'black_friday']]
 # test2 = pd.merge(test2, cal_cols, how='inner')
 del(count)
@@ -165,35 +220,37 @@ del(item_categories)
 del(calendar)
 del(stack_of_months)
 #%%
-cols =      ['shop_id', 'item_id', 'item_category_id', 'city_code', 'month_of_year', 'June 2015item_cnt_month', 'June 2015item_category_count_per_month', 'July 2015item_cnt_month', 'July 2015item_category_count_per_month', 'August 2015item_cnt_month', 'August 2015item_category_count_per_month', 'September 2015item_cnt_month', 'September 2015item_category_count_per_month', 'October 2015item_cnt_month', 'item_cnt_month', 'month_year_name']
-test_cols = ['shop_id', 'item_id', 'item_category_id', 'city_code', 'month_of_year', 'September 2015item_cnt_month', 'September 2015item_category_count_per_month', 'October 2015item_cnt_month', 'October 2015item_category_count_per_month']
-test = test[test_cols]
+cols =      ['shop_id', 'item_id', 'item_category_id', 'city_code', 'month_of_year', 'June 2015item_cnt_month', 'June 2015item_category_count_per_month','June 2015cat_count_per_month_ex_shops', 'July 2015item_cnt_month', 'July 2015item_category_count_per_month','July 2015cat_count_per_month_ex_shops', 'August 2015item_cnt_month', 'August 2015item_category_count_per_month','August 2015cat_count_per_month_ex_shops', 'September 2015item_cnt_month', 'September 2015item_category_count_per_month','September 2015cat_count_per_month_ex_shops', 'October 2015item_cnt_month', 'item_cnt_month', 'month_year_name']
+test_cols = ['shop_id', 'item_id', 'item_category_id', 'city_code', 'month_of_year', 'September 2015item_cnt_month', 'September 2015item_category_count_per_month','September 2015cat_count_per_month_ex_shops', 'October 2015item_cnt_month', 'October 2015item_category_count_per_month','October 2015cat_count_per_month_ex_shops']
+test2 = test2[test_cols]
 
 X_train = grouped_train[cols]
 del(grouped_train)
 
-X_val = X_train.loc[X_train['month_year_name'] == 'October 2015']
-X_train = X_train.loc[X_train['month_year_name'] != 'October 2015']
+X_val = X_train.loc[(X_train['month_year_name'] == 'October 2015') | (X_train['month_year_name'] == 'November 2015')]
+X_train = X_train.loc[(X_train['month_year_name'] != 'October 2015') & (X_train['month_year_name'] != 'November 2015')]
 
 y_train = X_train.pop('item_cnt_month')
 y_val = X_val.pop('item_cnt_month')
 
 #%%
 
-X_val.drop(columns=['June 2015item_cnt_month', 'June 2015item_category_count_per_month', 'July 2015item_cnt_month','July 2015item_category_count_per_month', 'October 2015item_cnt_month','June 2015item_category_count_per_month', 'month_year_name'], inplace=True)
+X_val.drop(columns=['June 2015item_cnt_month', 'June 2015item_category_count_per_month','June 2015cat_count_per_month_ex_shops', 'July 2015item_cnt_month','July 2015item_category_count_per_month','July 2015cat_count_per_month_ex_shops', 'October 2015item_cnt_month','June 2015item_category_count_per_month', 'month_year_name'], inplace=True)
 
-X_val.rename(columns={'August 2015item_cnt_month':'lag_2', 'September 2015item_cnt_month':'lag_1', 'August 2015item_category_count_per_month':'cat_lag_2', 'September 2015item_category_count_per_month':'cat_lag_1'}, inplace=True)
+X_val.rename(columns={'August 2015item_cnt_month':'lag_2', 'September 2015item_cnt_month':'lag_1', 'August 2015item_category_count_per_month':'cat_lag_2', 'September 2015item_category_count_per_month':'cat_lag_1', 'August 2015cat_count_per_month_ex_shops':'ex_shop_cat_lag_2', 'September 2015cat_count_per_month_ex_shops':'ex_shop_cat_lag_1'}, inplace=True)
 
-X_train.drop(columns=['September 2015item_cnt_month','September 2015item_category_count_per_month', 'October 2015item_cnt_month', 'August 2015item_cnt_month','August 2015item_category_count_per_month', 'month_year_name'], inplace=True)
+X_train.drop(columns=['September 2015item_cnt_month','September 2015item_category_count_per_month','September 2015cat_count_per_month_ex_shops', 'October 2015item_cnt_month', 'August 2015item_cnt_month','August 2015item_category_count_per_month','August 2015cat_count_per_month_ex_shops','August 2015cat_count_per_month_ex_shops', 'month_year_name'], inplace=True)
 
-X_train.rename(columns={'June 2015item_cnt_month':'lag_2', 'July 2015item_cnt_month':'lag_1', 'June 2015item_category_count_per_month':'cat_lag_2', 'July 2015item_category_count_per_month':'cat_lag_1'}, inplace=True)
+X_train.rename(columns={'June 2015item_cnt_month':'lag_2', 'July 2015item_cnt_month':'lag_1', 'June 2015item_category_count_per_month':'cat_lag_2', 'July 2015item_category_count_per_month':'cat_lag_1', 'June 2015cat_count_per_month_ex_shops':'ex_shop_cat_lag_2', 'July 2015cat_count_per_month_ex_shops':'ex_shop_cat_lag_1'}, inplace=True)
+
+X_train.head()
 #%%
 
-test.rename(columns={'September 2015item_cnt_month':'lag_2', 'September 2015item_category_count_per_month':'cat_lag_2', 'October 2015item_cnt_month':'lag_1', 'October 2015item_category_count_per_month':'cat_lag_1'}, inplace=True)
+test2.rename(columns={'September 2015item_cnt_month':'lag_2', 'September 2015item_category_count_per_month':'cat_lag_2', 'October 2015item_cnt_month':'lag_1', 'October 2015item_category_count_per_month':'cat_lag_1', 'September 2015cat_count_per_month_ex_shops':'ex_shop_cat_lag_1', 'October 2015cat_count_per_month_ex_shops':'ex_shop_cat_lag_2'}, inplace=True)
 #%%
 X_train.fillna(0, inplace=True)
 X_val.fillna(0, inplace=True)
-test.fillna(0, inplace=True)
+test2.fillna(0, inplace=True)
 y_train.fillna(0, inplace=True)
 y_val.fillna(0, inplace= True)
 #%%
@@ -202,10 +259,10 @@ ss = StandardScaler()
 ss.fit(X_train)
 X_train = ss.transform(X_train)
 X_val = ss.transform(X_val)
-test = ss.transform(test)
+test2 = ss.transform(test)
 #%%
 
-model = CatBoostRegressor(iterations=200,
+model = CatBoostRegressor(iterations=20,
                            depth=6,
                            learning_rate=0.05,
                            loss_function='RMSE',
@@ -213,19 +270,24 @@ model = CatBoostRegressor(iterations=200,
 # train the model
 model.fit(X_train, y_train)
 # make the prediction using the resulting model
-preds_class = model.predict(X_val)
-preds_proba = model.predict_proba(X_val)
-print("class = ", preds_class)
-print("proba = ", preds_proba)
+novel_preds = model.predict(X_val)
+train_preds = model.predict(X_train)
+MAE = mean_absolute_error(y_val, novel_preds)
+TMAE = mean_absolute_error(y_train, train_preds)
+naive_model = (y_val*0)+1
+NMAE = mean_absolute_error(y_val, naive_model)
+print(f'MAE: {MAE}, Naive_MAE: {NMAE}, Train_MAE: {TMAE}')
+
+test_pred_catboost = model.predict(test2)
 
 
-test_pred_xgboost=pd.DataFrame(test_pred_xgboost)
-test_pred_xgboost['ID']=test['ID']
-test_pred_xgboost.columns.values[0] = 'item_cnt_month'
-test_pred_xgboost.columns=['item_cnt_month', 'ID']
-test_pred_xgboost = test_pred_xgboost[['ID','item_cnt_month']]
-test_pred_xgboost['item_cnt_month'] = test_pred_xgboost['item_cnt_month'].clip(0,20)
-test_pred_xgboost.to_csv('C:/Users/Carin/OneDrive/Documents/AW academy/Miniprosjekt 2/XGBoost_preds.csv', index = False)
+test_pred_catboost=pd.DataFrame(test_pred_catboost)
+test_pred_catboost['ID']=test['ID']
+test_pred_catboost.columns.values[0] = 'item_cnt_month'
+test_pred_catboost.columns=['item_cnt_month', 'ID']
+test_pred_catboost = test_pred_catboost[['ID','item_cnt_month']]
+test_pred_catboost['item_cnt_month'] = test_pred_catboost['item_cnt_month'].clip(0,20)
+test_pred_catboost.to_csv('C:/Users/Carin/OneDrive/Documents/AW academy/Miniprosjekt 2/Naive_preds2.csv', index = False)
 
 #%%
 
