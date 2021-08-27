@@ -17,6 +17,8 @@ import numpy as np
 from sklearn.metrics import mean_absolute_error
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from catboost import CatBoostRegressor, Pool
+
+from sklearn.linear_model import LinearRegression
 #%%
 # Cell1
 items = pd.read_csv(r'C:\Users\Nelly\Downloads\competitive-data-science-predict-future-sales\items.csv')
@@ -28,12 +30,13 @@ calendar = pd.read_csv(r'C:\Users\Nelly\Desktop\Predict prices\calender.csv')
 
 
 #%%
-# Cell2
+# set date format 
 sales_train['date'] = pd.to_datetime(sales_train.date)
-calendar['date'] = pd.to_datetime(calendar['date'], format='%Y-%m-%d')
+calendar['date'] = pd.to_datetime(calendar['date'], format='%Y-%m-%d')   
 
 #%%
-# Cell3
+# merge a lot
+
 sales_train = pd.merge(sales_train, test, how='left')
 test['month_of_year']=11
 
@@ -47,14 +50,15 @@ test = pd.merge(test, shops, how='left')
 
 sales_train = pd.merge(sales_train, calendar, how='left')
 #%%
-# Cell4
+# drop shop id 
 sales_train.drop(columns=['shop_id'], inplace=True)
 test.drop(columns=['shop_id'], inplace=True)
 
+#give unique shop id new name
 sales_train.rename(columns={'unique_shop_id':'shop_id'}, inplace=True)
 test.rename(columns={'unique_shop_id':'shop_id'}, inplace=True)
 #%%
-# Cell5
+# boild the structure 
 build_cols = ['date_block_num','shop_id','item_id']
 stack_of_months = []
 for month_num in sales_train['date_block_num'].unique():
@@ -76,18 +80,23 @@ matrix.sort_values(build_cols, inplace=True)
 
 
 #%%
-# Cell6
+# make a dataframe with prefferede columns
 count = sales_train[['month_year_name', 'item_cnt_day','shop_id', 'item_id', 'item_category_id']]
+#group by month to get motnhly count 
 count_day = count.groupby(['month_year_name','shop_id', 'item_id', 'item_category_id']).sum().reset_index()
+#select the preferred columns for the dataframe
 count_day.columns = ['month_year_name', 'shop_id', 'item_id', 'item_category_id', 'item_cnt_month']
+
 
 count = pd.pivot_table(count_day, values =['shop_id', 'item_id', 'item_cnt_month'], index =['shop_id', 'item_id', 'item_category_id'],
                          columns =['month_year_name']).reset_index().rename_axis(None, axis=0)
 count.columns = [f'{j}{i}' for i, j in count.columns]
-count.columns
-count.fillna(0, inplace=True)
+count.columns 
+
+count.fillna(0, inplace=True)   #fill na with 0
 #count=count.astype(np.int8)
 
+## delete columns to make df smaller 
 count.drop(columns=['April 2013item_cnt_month',
        'April 2014item_cnt_month',
        'August 2013item_cnt_month', 'August 2014item_cnt_month',
@@ -108,14 +117,17 @@ count.drop(columns=['April 2013item_cnt_month',
        'September 2014item_cnt_month'], inplace=True)
 
 #%%
-# Cell7
+# It's time to count categories 
 count_cats = sales_train[['month_year_name', 'item_cnt_day','shop_id', 'item_category_id']]
-count_cats = count_cats.groupby(['month_year_name','shop_id', 'item_category_id']).sum()
-count_cats = count_cats.reset_index()
-count_cats.columns = ['month_year_name', 'shop_id', 'item_category_id', 'item_category_count_per_month']
+count_cats = count_cats.groupby(['month_year_name','shop_id', 'item_category_id']).sum()  
+count_cats = count_cats.reset_index()   
+count_cats.columns = ['month_year_name', 'shop_id', 'item_category_id', 'item_category_count_per_month']   #set preffered order on columns 
 
+#pivot makes a column for each month 
 count_cats = pd.pivot_table(count_cats, values =['shop_id', 'item_category_id', 'item_category_count_per_month'], index =['shop_id', 'item_category_id'],
-                         columns =['month_year_name']).reset_index().rename_axis(None, axis=0)
+
+                            columns =['month_year_name']).reset_index().rename_axis(None, axis=0)
+#get only one row of headers
 count_cats.columns = [f'{j}{i}' for i, j in count_cats.columns]
 count_cats.columns
 
@@ -146,7 +158,8 @@ count_cats=count_cats.drop(columns= ['April 2013item_category_count_per_month',
        'September 2013item_category_count_per_month',
        'September 2014item_category_count_per_month'])
 #%%
-# Cell8
+# including count by shop id 
+
 date_count_cat = sales_train[['month_year_name', 'item_cnt_day', 'item_category_id']]
 date_count_cat = date_count_cat.groupby(['month_year_name', 'item_category_id']).sum()
 date_count_cat = date_count_cat.reset_index()
@@ -191,28 +204,34 @@ date_count_cat=date_count_cat.drop(columns= ['April 2013cat_count_per_month_ex_s
 # count_full = pd.merge(count_full, date_count_cat, how='left', left_on=['item_category_id'], right_on=['item_category_id'])
 
 #%%
-# Cell10
+# prep train set 
 grouped_train = sales_train[['month_year_name', 'item_cnt_day', 'shop_id', 'item_id', 'item_category_id']]
 grouped_train = grouped_train.groupby(['month_year_name','shop_id', 'item_id', 'item_category_id']).sum().reset_index()
 grouped_train = pd.merge(grouped_train, sales_train, how='left')
 #%%
-# Cell11
+# outer join with the matrix
 grouped_train = pd.merge(grouped_train, matrix, how='outer')
 del(matrix)
-#%% Cell12
+#%% merge train set with the counted data 
 
 grouped_train = pd.merge(grouped_train, count, how='left')
 grouped_train = pd.merge(grouped_train, count_cats, how='left')
 #grouped_train = pd.merge(grouped_train, count_full, how='inner')
 grouped_train = pd.merge(grouped_train, count_day, how='left')
 grouped_train = pd.merge(grouped_train, date_count_cat, how='left')
+
+#calling it test2 to not mix up with the actual test set 
 test2 = pd.merge(test, count, how='left')
 test2 = pd.merge(test2, count_cats, how ='left')
 test2 = pd.merge(test2, date_count_cat, how='left')
-#%% Cell13
-train_head=grouped_train.head(10)
+
+#train_head=grouped_train.head(10)  #chek the top of the set 
+
 # cal_cols = grouped_train[['shop_id', 'item_id', 'red_day_not_sun', 'black_friday']]
 # test2 = pd.merge(test2, cal_cols, how='inner')
+
+#clean up variable explorer
+
 del(count)
 del(count_cats)
 del(count_day)
@@ -230,10 +249,11 @@ test2 = test2[test_cols]
 X_train = grouped_train[cols]
 del(grouped_train)
 
+## split in train and val set, where November is val-set
 X_val = X_train.loc[(X_train['month_year_name'] == 'October 2015') | (X_train['month_year_name'] == 'November 2015')]
 X_train = X_train.loc[(X_train['month_year_name'] != 'October 2015') & (X_train['month_year_name'] != 'November 2015')]
 
-y_train = X_train.pop('item_cnt_month')
+y_train = X_train.pop('item_cnt_month')  #move item_cnt_month over to y_val with pop
 y_val = X_val.pop('item_cnt_month')
 
 #%%
@@ -246,18 +266,20 @@ X_train.drop(columns=['September 2015item_cnt_month','September 2015item_categor
 
 X_train.rename(columns={'June 2015item_cnt_month':'lag_2', 'July 2015item_cnt_month':'lag_1', 'June 2015item_category_count_per_month':'cat_lag_2', 'July 2015item_category_count_per_month':'cat_lag_1', 'June 2015cat_count_per_month_ex_shops':'ex_shop_cat_lag_2', 'July 2015cat_count_per_month_ex_shops':'ex_shop_cat_lag_1'}, inplace=True)
 
-X_train.head()
-#%%
+X_train.head()  #check data
 
+
+## give the lag months prettier names 
 test2.rename(columns={'September 2015item_cnt_month':'lag_2', 'September 2015item_category_count_per_month':'cat_lag_2', 'October 2015item_cnt_month':'lag_1', 'October 2015item_category_count_per_month':'cat_lag_1', 'September 2015cat_count_per_month_ex_shops':'ex_shop_cat_lag_1', 'October 2015cat_count_per_month_ex_shops':'ex_shop_cat_lag_2'}, inplace=True)
-#%%
+#%% fill onn zeroes 
+
 X_train.fillna(0, inplace=True)
 X_val.fillna(0, inplace=True)
 test2.fillna(0, inplace=True)
 ##
 y_train.fillna(0, inplace=True)
 y_val.fillna(0, inplace= True)
-#%%
+#%%  scale
 
 ss = StandardScaler()
 ss.fit(X_train)
@@ -265,6 +287,14 @@ X_train = ss.transform(X_train)
 X_val = ss.transform(X_val)
 test2 = ss.transform(test2)
 #%%
+
+
+
+
+
+
+
+
 
 model = CatBoostRegressor(iterations=300,
                            depth=4,
@@ -355,3 +385,35 @@ print(f'train MAE: {train_mae}, Naive_MAE: {NMAE}, val MAE: {val_mae}')
 
 test_pred_tf = model.predict(test2)
 
+
+## linear regression 
+
+
+lr_model = LinearRegression()
+lr_model.fit(X=X_train, y=y_train)
+
+
+# train the model
+lr_model.fit(X_train, y_train)
+# make the prediction using the resulting model
+novel_preds = lr_model.predict(X_val)
+train_preds = lr_model.predict(X_train)
+MAE = mean_absolute_error(y_val, novel_preds)
+TMAE = mean_absolute_error(y_train, train_preds)
+naive_model = (y_val*0)+1
+NMAE = mean_absolute_error(y_val, naive_model)
+print(f'MAE: {MAE}, Naive_MAE: {NMAE}, Train_MAE: {TMAE}')
+
+pred_lr = lr_model.predict(test2)
+
+test_pred_lr=pd.DataFrame(pred_lr)
+test_pred_lr['ID']=test['ID']
+test_pred_lr.columns.values[0] = 'item_cnt_month'
+test_pred_lr.columns=['item_cnt_month', 'ID']
+test_pred_lr = test_pred_lr[['ID','item_cnt_month']]
+test_pred_lr['item_cnt_month'] =test_pred_lr['item_cnt_month'].clip(0,20)
+test_pred_lr.to_csv(r'C:\Users\Nelly\Desktop\Predict prices\linear_fun.csv', index = False)
+
+import matplotlib.pyplot as plt
+
+plt.scatter(y_train, train_preds, c='crimson')
